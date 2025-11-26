@@ -1,0 +1,138 @@
+<html><head><style>body {
+   color: black;
+}
+</style></head><body><h1 id="-kaos-y-netimi-net-ve-python-da-dayan-kl-sistem-tasar-m-">⚙️ Kaos Yönetimi: .NET ve Python’da Dayanıklı Sistem Tasarımı</h1>
+<h3 id="-chaos-management-in-net-and-python-">(Chaos Management in .NET and Python)</h3>
+<p><img src="https://files.catbox.moe/2n4pl5.png" alt="Chaos Management Overview"></p>
+<blockquote>
+<p><strong>“Kaos yönetimi, yazılımın gerçek dünyadaki beklenmedik durumlara nasıl tepki verdiğini anlamanın sanatıdır.”</strong></p>
+</blockquote>
+<p>Modern yazılım sistemleri artık sadece koddan ibaret değil; mikro servisler, bulut tabanlı bileşenler, üçüncü parti API’ler ve mesaj kuyrukları arasında yaşayan karmaşık bir ekosistem.<br>Bu yapıların “çökmeden” çalışabilmesi, yani <strong>dayanıklı (resilient)</strong> olması ise doğrudan “kaos yönetimi” yaklaşımlarına bağlıdır.</p>
+<hr>
+<h2 id="-kaos-y-netimi-nedir-">🔍 Kaos Yönetimi Nedir?</h2>
+<p>Kaos Yönetimi (Chaos Management), sistemlerin hata koşullarında nasıl davrandığını anlamak, hata toleransını artırmak ve geri dönüş stratejilerini test etmek için kullanılan bir mühendislik yaklaşımıdır.<br>Amaç, sistemleri <strong>bilinçli olarak stres altına almak</strong> ve onların nasıl tepki verdiğini gözlemlemektir.</p>
+<h3 id="-rnek-durum-">💡 Örnek Durum:</h3>
+<p>Bir .NET API’si düşünün — dış bir servise bağlanıp veri çekiyor.<br>Bu servis aniden yanıt vermezse ne olur?<br>İşte kaos yönetimi burada devreye girer.</p>
+<hr>
+<h2 id="-temel-prensipler">🧱 Temel Prensipler</h2>
+<ol>
+<li><p><strong>Hata Tolere Etme (Fault Tolerance)</strong><br>Her sistem bileşeni, diğerinin çökmesini tolere edebilmelidir.</p>
+</li>
+<li><p><strong>Gözlemlenebilirlik (Observability)</strong><br>Loglama, metrikler ve tracing araçları (OpenTelemetry, Prometheus, Application Insights vb.) sistemin nabzını tutar.</p>
+</li>
+<li><p><strong>Kendini İyileştirme (Self-Healing)</strong><br>Hata sonrası otomatik olarak yeniden deneme (retry), yönlendirme veya devre kesici mekanizmaları devreye girer.</p>
+</li>
+</ol>
+<hr>
+<h2 id="-net-d-nyas-nda-kaos-y-netimi">🧩 .NET Dünyasında Kaos Yönetimi</h2>
+<h3 id="-retry-ve-timeout-pattern">🔁 Retry ve Timeout Pattern</h3>
+<p><img src="https://files.catbox.moe/4btqiw.png" alt="Retry and Timeout Flow"></p>
+<p>.NET’te en popüler kütüphanelerden biri <strong>Polly</strong>’dir.<br>Polly, retry, timeout, circuit breaker gibi dayanıklılık stratejilerini uygulamak için kullanılır.</p>
+<h4 id="-rnek-polly-ile-retry-politikas-">🧠 Örnek: Polly ile Retry Politikası</h4>
+<pre><code class="lang-csharp"><span class="hljs-keyword">var</span> policy = Policy
+    .Handle&lt;HttpRequestException&gt;()
+    .WaitAndRetryAsync(<span class="hljs-number">3</span>, attempt =&gt; 
+        TimeSpan.FromSeconds(Math.Pow(<span class="hljs-number">2</span>, attempt)), 
+        (exception, timeSpan, retryCount, context) =&gt;
+        {
+            Console.WriteLine($<span class="hljs-string">"Deneme {retryCount} başarısız. {timeSpan.TotalSeconds} saniye sonra yeniden deneniyor..."</span>);
+        });
+
+<span class="hljs-keyword">await</span> policy.ExecuteAsync(<span class="hljs-keyword">async</span> () =&gt;
+{
+    <span class="hljs-keyword">var</span> response = <span class="hljs-keyword">await</span> httpClient.GetAsync(<span class="hljs-string">"https://api.service.com/data"</span>);
+    response.EnsureSuccessStatusCode();
+});
+</code></pre>
+<p>Bu örnekte:  </p>
+<ul>
+<li><strong>3 kez yeniden deneme</strong> yapılıyor.  </li>
+<li>Her denemede <strong>üstel artan bekleme süresi</strong> uygulanıyor.  </li>
+<li>Başarısız her istekte log kaydı tutuluyor.</li>
+</ul>
+<hr>
+<h2 id="-circuit-breaker-devre-kesici-pattern">🧠 Circuit Breaker (Devre Kesici) Pattern</h2>
+<p><img src="https://files.catbox.moe/1d2u3q.png" alt="Circuit Breaker Diagram"></p>
+<p>Circuit Breaker, sistemin sürekli hatalı servislere istek göndermesini önler.<br>Yani “bile bile kötü servise gitme” prensibine dayanır.</p>
+<h4 id="-polly-ile-circuit-breaker-">🧩 Polly ile Circuit Breaker:</h4>
+<pre><code class="lang-csharp"><span class="hljs-keyword">var</span> circuitBreakerPolicy = Policy
+    .Handle&lt;HttpRequestException&gt;()
+    .CircuitBreakerAsync(
+        exceptionsAllowedBeforeBreaking: <span class="hljs-number">2</span>,
+        <span class="hljs-attr">durationOfBreak</span>: TimeSpan.FromSeconds(<span class="hljs-number">30</span>),
+        <span class="hljs-attr">onBreak</span>: <span class="hljs-function">(<span class="hljs-params">ex, breakDelay</span>) =&gt;</span>
+        {
+            Console.WriteLine($<span class="hljs-string">"Circuit açık! {breakDelay.TotalSeconds} saniye bekleniyor..."</span>);
+        },
+        <span class="hljs-attr">onReset</span>: <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> Console.WriteLine(<span class="hljs-string">"Circuit sıfırlandı."</span>),
+        <span class="hljs-attr">onHalfOpen</span>: <span class="hljs-function"><span class="hljs-params">()</span> =&gt;</span> Console.WriteLine(<span class="hljs-string">"Circuit yarı açık durumda, test isteği gönderiliyor."</span>)
+    );
+
+<span class="hljs-keyword">await</span> circuitBreakerPolicy.ExecuteAsync(<span class="hljs-keyword">async</span> () =&gt;
+{
+    <span class="hljs-keyword">await</span> httpClient.GetAsync(<span class="hljs-string">"https://api.service.com/data"</span>);
+});
+</code></pre>
+<hr>
+<h2 id="-python-d-nyas-nda-kaos-y-netimi">🐍 Python Dünyasında Kaos Yönetimi</h2>
+<p>Python tarafında en yaygın kullanılan kütüphane <strong>Tenacity</strong>’dir.<br>Tenacity, basit ama güçlü bir yeniden deneme (retry) mekanizması sağlar.</p>
+<h4 id="-tenacity-ile-retry-">🧠 Tenacity ile Retry:</h4>
+<pre><code class="lang-python">from tenacity <span class="hljs-keyword">import</span> retry, wait_exponential, stop_after_attempt
+
+<span class="hljs-meta">@retry</span>(wait=wait_exponential(multiplier=<span class="hljs-number">1</span>, min=<span class="hljs-number">2</span>, max=<span class="hljs-number">10</span>), stop=stop_after_attempt(<span class="hljs-number">5</span>))
+def fetch_data():
+    print(<span class="hljs-string">"Veri çekiliyor..."</span>)
+    response = requests.<span class="hljs-keyword">get</span>(<span class="hljs-string">"https://api.service.com/data"</span>)
+    response.raise_for_status()
+    <span class="hljs-keyword">return</span> response.json()
+
+fetch_data()
+</code></pre>
+<p>Bu örnekte:  </p>
+<ul>
+<li><strong>5 kez yeniden deneme</strong> yapılır.  </li>
+<li>Her hata sonrası bekleme süresi üstel olarak artar.  </li>
+<li>Maksimum 10 saniyeye kadar beklenir.</li>
+</ul>
+<hr>
+<h2 id="-i-zleme-monitoring-ve-telemetri">🧰 İzleme (Monitoring) ve Telemetri</h2>
+<p><img src="https://files.catbox.moe/8z6c3n.png" alt="Monitoring and Telemetry"></p>
+<p>Kaos yönetiminin kalbinde <strong>izleme (monitoring)</strong> vardır.<br>Sistemin ne durumda olduğunu bilmeden dayanıklılığını ölçemezsiniz.</p>
+<h3 id="-net-i-in-">.NET için:</h3>
+<ul>
+<li><strong>Application Insights</strong></li>
+<li><strong>Serilog + Seq</strong></li>
+<li><strong>OpenTelemetry Collector</strong></li>
+</ul>
+<h3 id="python-i-in-">Python için:</h3>
+<ul>
+<li><strong>Prometheus Client</strong></li>
+<li><strong>Sentry</strong></li>
+<li><strong>Grafana Agent</strong></li>
+</ul>
+<hr>
+<h2 id="-kaos-testleri-chaos-experiments-">🔄 Kaos Testleri (Chaos Experiments)</h2>
+<h3 id="-rnek-servis-kesintisi-testi">💥 Örnek: Servis Kesintisi Testi</h3>
+<p>Bir test ortamında rastgele mikro servisler devre dışı bırakılarak, sistemin nasıl tepki verdiği ölçülür.</p>
+<h4 id="bash-rne-i-">Bash örneği:</h4>
+<pre><code class="lang-bash">kubectl <span class="hljs-keyword">delete</span> pod <span class="hljs-keyword">my</span>-service-pod-<span class="hljs-number">1</span>
+</code></pre>
+<p>Ardından dashboard’dan hata oranı, latency ve recovery süresi gözlemlenir.</p>
+<hr>
+<h2 id="-sonu-">🧭 Sonuç</h2>
+<p>Kaos yönetimi, sadece hata senaryolarını ele almak değil, <strong>sistemi hata yapmaya teşvik etmek</strong> ve bu hatalardan <strong>öğrenmek</strong> felsefesidir.<br>.NET ve Python ekosistemleri, bu konuda güçlü kütüphaneler ve gözlemlenebilirlik araçları sunar.</p>
+<blockquote>
+<p>“Dayanıklı sistemler, hiç hata yapmayanlar değil; hata yaptığında ayağa kalkabilenlerdir.”</p>
+</blockquote>
+<hr>
+<h2 id="-kaynak-a">📚 Kaynakça</h2>
+<ul>
+<li>Microsoft Docs – <a href="https://github.com/App-vNext/Polly">Polly Resilience Library</a></li>
+<li>Tenacity – <a href="https://tenacity.readthedocs.io/">Python Retry Library</a></li>
+<li>Netflix Chaos Monkey</li>
+<li>OpenTelemetry &amp; Prometheus Docs</li>
+</ul>
+<hr>
+<p><strong>Yazar:</strong> Fatma<br><em>Full-Stack Mobile Developer | Kaos Yönetimi &amp; Dayanıklılık Meraklısı</em></p>
+<p><img src="https://files.catbox.moe/2n4pl5.png" alt="Footer Graphic"></p>
+</body></html>
